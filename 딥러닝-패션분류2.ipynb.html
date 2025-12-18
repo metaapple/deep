@@ -1,0 +1,250 @@
+<html>
+<head>
+<title>딥러닝-패션분류2.ipynb</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #080808;}
+.s1 { color: #8c8c8c; font-style: italic;}
+.s2 { color: #0033b3;}
+.s3 { color: #1750eb;}
+.s4 { color: #067d17;}
+.ls0 { height: 1px; border-width: 0; color: #cccccc; background-color:#cccccc}
+</style>
+</head>
+<body bgcolor="#ffffff">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#c0c0c0" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+딥러닝-패션분류2.ipynb</font>
+</center></td></tr></table>
+<pre><span class="s0">#%% 
+</span><span class="s1"># 라이브러리 설정</span>
+<span class="s2">import </span><span class="s0">pandas </span><span class="s2">as </span><span class="s0">pd</span>
+<span class="s2">import </span><span class="s0">numpy </span><span class="s2">as </span><span class="s0">np</span>
+<span class="s2">import </span><span class="s0">tensorflow </span><span class="s2">as </span><span class="s0">tf</span>
+<span class="s2">from </span><span class="s0">tensorflow </span><span class="s2">import </span><span class="s0">keras</span>
+<span class="s2">import </span><span class="s0">random</span>
+
+<span class="s1"># 랜덤 시드 고정</span>
+<span class="s0">SEED=</span><span class="s3">12</span>
+<span class="s0">random.seed(SEED)</span>
+<span class="s0">np.random.seed(SEED)</span>
+<span class="s0">tf.random.set_seed(SEED)</span><hr class="ls0"><span class="s0">#%% 
+train = pd.read_csv(</span><span class="s4">&quot;fashionmnist/train.csv&quot;</span><span class="s0">)</span>
+<span class="s0">test = pd.read_csv(</span><span class="s4">&quot;fashionmnist/test.csv&quot;</span><span class="s0">)</span>
+
+<span class="s0">print(train.shape, test.shape)</span><hr class="ls0"><span class="s0">#%% 
+train.head(</span><span class="s3">3</span><span class="s0">)</span><hr class="ls0"><span class="s0">#%% 
+test.head(</span><span class="s3">3</span><span class="s0">)</span><hr class="ls0"><span class="s0">#%% 
+train_images = train.loc[:, </span><span class="s4">'pixel1'</span><span class="s0">:].values.reshape(-</span><span class="s3">1</span><span class="s0">, </span><span class="s3">28</span><span class="s0">, </span><span class="s3">28</span><span class="s0">)</span>
+<span class="s0">train_images.shape</span><hr class="ls0"><span class="s0">#%% 
+train_images[</span><span class="s3">0</span><span class="s0">][</span><span class="s3">0</span><span class="s0">]</span><hr class="ls0"><span class="s0">#%% 
+</span><span class="s2">import </span><span class="s0">matplotlib.pyplot </span><span class="s2">as </span><span class="s0">plt</span>
+<span class="s0">plt.imshow(train_images[</span><span class="s3">0</span><span class="s0">])</span><hr class="ls0"><span class="s0">#%% 
+plt.imshow(train_images[</span><span class="s3">1</span><span class="s0">])</span><hr class="ls0"><span class="s0">#%% 
+y_train = train.loc[:, </span><span class="s4">'label'</span><span class="s0">]</span>
+<span class="s0">y_train</span><hr class="ls0"><span class="s0">#%% 
+y_train.value_counts()</span><hr class="ls0"><span class="s0">#%% 
+y_train.unique()</span><hr class="ls0"><span class="s0">#%% 
+target_values = {</span><span class="s3">0 </span><span class="s0">: </span><span class="s4">'T-shirt/top'</span><span class="s0">,</span>
+                 <span class="s3">1 </span><span class="s0">: </span><span class="s4">'Trouser'</span><span class="s0">,</span>
+                 <span class="s3">2</span><span class="s0">: </span><span class="s4">'Pullover'</span><span class="s0">,</span>
+                 <span class="s3">3</span><span class="s0">: </span><span class="s4">'Dress'</span><span class="s0">,</span>
+                 <span class="s3">4</span><span class="s0">: </span><span class="s4">'Coat'</span><span class="s0">,</span>
+                 <span class="s3">5</span><span class="s0">: </span><span class="s4">'Sandal'</span><span class="s0">,</span>
+                 <span class="s3">6</span><span class="s0">: </span><span class="s4">'Shirt'</span><span class="s0">,</span>
+                 <span class="s3">7</span><span class="s0">: </span><span class="s4">'Sneaker'</span><span class="s0">,</span>
+                 <span class="s3">8</span><span class="s0">: </span><span class="s4">'Bag'</span><span class="s0">,</span>
+                 <span class="s3">9</span><span class="s0">: </span><span class="s4">'Ankle boot'</span><span class="s0">}</span><hr class="ls0"><span class="s0">#%% 
+y_train[</span><span class="s3">0</span><span class="s0">]</span><hr class="ls0"><span class="s0">#%% 
+target_values[</span><span class="s3">2</span><span class="s0">]</span><hr class="ls0"><span class="s0">#%% 
+target_values[y_train[</span><span class="s3">0</span><span class="s0">]]</span><hr class="ls0"><span class="s0">#%% 
+</span><span class="s1"># 읽은 test.csv에 들어있는 첫번째, 두번째 이미지를 화면에 보이고,</span>
+<span class="s1"># 이름이 무엇인지 프린트해보세요.</span><hr class="ls0"><span class="s0">#%% 
+test.head(</span><span class="s3">3</span><span class="s0">)</span><hr class="ls0"><span class="s0">#%% 
+test_images = test.loc[:, </span><span class="s4">'pixel1'</span><span class="s0">:].values.reshape(-</span><span class="s3">1</span><span class="s0">, </span><span class="s3">28</span><span class="s0">, </span><span class="s3">28</span><span class="s0">)</span>
+<span class="s0">test_images.shape</span><hr class="ls0"><span class="s0">#%% 
+test_images[</span><span class="s3">0</span><span class="s0">] </span><span class="s1"># 한장의 이미지</span><hr class="ls0"><span class="s0">#%% 
+test_images[</span><span class="s3">0</span><span class="s0">][</span><span class="s3">0</span><span class="s0">] </span><span class="s1"># 한장의 이미지에서 첫줄</span><hr class="ls0"><span class="s0">#%% 
+test_images[</span><span class="s3">0</span><span class="s0">][</span><span class="s3">0</span><span class="s0">][</span><span class="s3">0</span><span class="s0">] </span><span class="s1"># 한장의 이미지에서 첫줄의 첫셀</span><hr class="ls0"><span class="s0">#%% 
+plt.imshow(test_images[</span><span class="s3">0</span><span class="s0">])</span><hr class="ls0"><span class="s0">#%% 
+y_test = test.loc[:, </span><span class="s4">'label'</span><span class="s0">]</span>
+<span class="s0">y_test.head()</span><hr class="ls0"><span class="s0">#%% 
+target_values[</span><span class="s3">0</span><span class="s0">]</span><hr class="ls0"><span class="s0">#%% 
+</span><span class="s1">## 전처리해서 255나누어서 스케일링을 합시다.!</span>
+<span class="s1">## 스케일링 0~255</span>
+<span class="s0">X_train = train_images / </span><span class="s3">255</span>
+<span class="s0">X_test = test_images / </span><span class="s3">255</span>
+
+<span class="s0">print(</span><span class="s4">&quot;최소값:&quot;</span><span class="s0">, X_train[</span><span class="s3">0</span><span class="s0">].min())</span>
+<span class="s0">print(</span><span class="s4">&quot;최대값:&quot;</span><span class="s0">, X_train[</span><span class="s3">0</span><span class="s0">].max())</span><hr class="ls0"><span class="s0">#%% 
+</span><span class="s1"># 채널 차원 추가(3차원---&gt;4차원으로!)</span>
+<span class="s0">print(</span><span class="s4">&quot;변환 전:&quot;</span><span class="s0">, X_train.shape, X_test.shape)</span><hr class="ls0"><span class="s0">#%% 
+</span><span class="s1">## 이미지를 딥러닝처리를 할 예정이면, 4차원이 되어야함.</span>
+<span class="s0">X_train = np.expand_dims(X_train, axis=-</span><span class="s3">1</span><span class="s0">)</span>
+<span class="s0">X_test = np.expand_dims(X_test, axis=-</span><span class="s3">1</span><span class="s0">)</span><hr class="ls0"><span class="s0">#%% 
+print(</span><span class="s4">&quot;변환 후:&quot;</span><span class="s0">, X_train.shape, X_test.shape)</span><hr class="ls0"><span class="s0">#%% 
+</span><span class="s1"># Train - Validation 데이터 구분</span>
+<span class="s2">from </span><span class="s0">sklearn.model_selection </span><span class="s2">import </span><span class="s0">train_test_split</span>
+
+<span class="s0">X_tr, X_val, y_tr, y_val =  train_test_split(X_train, y_train, test_size=</span><span class="s3">0.2</span><span class="s0">, stratify=y_train, shuffle=</span><span class="s2">True</span><span class="s0">, random_state=SEED)</span>
+<span class="s0">print(</span><span class="s4">&quot;학습 데이터셋 크기: &quot;</span><span class="s0">, X_tr.shape, y_tr.shape)</span>
+<span class="s0">print(</span><span class="s4">&quot;검증 데이터셋 크기: &quot;</span><span class="s0">, X_val.shape, y_val.shape)</span><hr class="ls0"><span class="s0">#%% 
+</span><span class="s2">from </span><span class="s0">tensorflow.keras.models </span><span class="s2">import </span><span class="s0">Sequential</span>
+<span class="s2">from </span><span class="s0">tensorflow.keras.layers </span><span class="s2">import </span><span class="s0">Flatten, Dense, Dropout</span><hr class="ls0"><span class="s0">#%% 
+mlp_model = Sequential()</span>
+<span class="s1"># 입력층은 쭉 일렬로 만들어주어야함.</span>
+<span class="s0">mlp_model.add(Flatten(input_shape=[</span><span class="s3">28</span><span class="s0">,</span><span class="s3">28</span><span class="s0">])) </span><span class="s1">#784</span>
+<span class="s1"># 은닉층 여러겹 중 한겹만 쌓음.</span>
+<span class="s0">mlp_model.add(Dense(units=</span><span class="s3">64</span><span class="s0">, activation=</span><span class="s4">'relu'</span><span class="s0">))</span>
+<span class="s1"># 64 --&gt; 32변경 시 예상 효과:</span>
+<span class="s1"># 파라메터 수 계산 &gt;&gt; 32개의 가중치만 계산에 넣음.</span>
+<span class="s1"># 784 * 32 ==&gt; 25,120개의 경우의 수를 계산함.(파라메터수)</span>
+<span class="s1"># 학습 속도는 &gt;&gt; 빨라진다(*)</span>
+<span class="s1"># 메모리 사용량은 &gt;&gt; 적어진다(*)</span>
+
+<span class="s1"># 출력층</span>
+<span class="s0">mlp_model.add(Dense(units=</span><span class="s3">10</span><span class="s0">, activation=</span><span class="s4">'softmax'</span><span class="s0">))</span><hr class="ls0"><span class="s0">#%% 
+</span><span class="s1"># softmax가 나온 결과치가 손실이 얼마가 되는지(손실함수)</span>
+<span class="s1"># 이진분류 --&gt; binary cross entropy</span>
+<span class="s1"># 다중분류 --&gt; categorical cross entropy</span><hr class="ls0"><span class="s0">#%% 
+</span><span class="s1"># 가중치를 조절해주어 최적화시켜주는 옵티마이저가 필요</span>
+<span class="s1"># SGD, Adam(**)</span><hr class="ls0"><span class="s0">#%% 
+mlp_model.compile(optimizer=</span><span class="s4">'adam'</span><span class="s0">, loss=</span><span class="s4">'sparse_categorical_crossentropy'</span><span class="s0">, metrics=[</span><span class="s4">'acc'</span><span class="s0">])</span><hr class="ls0"><span class="s0">#%% 
+mlp_model.summary()</span><hr class="ls0"><span class="s0">#%% 
+</span><span class="s1"># 20번만 읽어서 반복해서 학습하게 하자..epoch(에포크, 주기)</span>
+<span class="s1"># 이미지 하나씩 읽어서 판단한 다음 손실함수 구해보고, 기울기 조절 반복</span>
+<span class="s1"># 이미지를 여러개 조금씩 묶어서 판단한 다음 묶은 것의 손실함수를 구해보고,</span>
+<span class="s1"># 기울기를 조절 반복이 더 효과적. 64개로 묶을 엮음.</span>
+<span class="s1"># 1주기당 ==&gt; 750회 읽음.</span>
+<span class="s1"># 미니배치라고 함.</span>
+<span class="s0">mlp_history = mlp_model.fit(X_tr, y_tr,</span>
+                            <span class="s0">batch_size=</span><span class="s3">64</span><span class="s0">,</span>
+                            <span class="s0">epochs=</span><span class="s3">20</span><span class="s0">,</span>
+                            <span class="s0">validation_data=(X_val, y_val),</span>
+                            <span class="s0">verbose=</span><span class="s3">2</span>
+                            <span class="s0">)</span><hr class="ls0"><span class="s0">#%% 
+mlp_history </span><span class="s1">## 딥러닝에는 epoch를 수행하면서 특정한 상황이 되면 호출할 수 있는 콜백함수가 많이 정의되어있어서 편함.</span><hr class="ls0"><span class="s0">#%% 
+mlp_history.history </span><span class="s1">#dict</span><hr class="ls0"><span class="s0">#%% 
+mlp_history.history.keys()</span><hr class="ls0"><span class="s0">#%% 
+mlp_history.history[</span><span class="s4">'acc'</span><span class="s0">]</span><hr class="ls0"><span class="s0">#%% 
+plt.plot(mlp_history.history[</span><span class="s4">'loss'</span><span class="s0">])</span>
+<span class="s0">plt.plot(mlp_history.history[</span><span class="s4">'val_loss'</span><span class="s0">])</span>
+<span class="s0">plt.xlabel(</span><span class="s4">'epoch'</span><span class="s0">)</span>
+<span class="s0">plt.ylabel(</span><span class="s4">'loss'</span><span class="s0">)</span>
+<span class="s0">plt.legend([</span><span class="s4">'train'</span><span class="s0">, </span><span class="s4">'val'</span><span class="s0">])</span>
+<span class="s0">plt.show()</span><hr class="ls0"><span class="s0">#%% 
+plt.plot(mlp_history.history[</span><span class="s4">'acc'</span><span class="s0">])</span>
+<span class="s0">plt.plot(mlp_history.history[</span><span class="s4">'val_acc'</span><span class="s0">])</span>
+<span class="s0">plt.xlabel(</span><span class="s4">'epoch'</span><span class="s0">)</span>
+<span class="s0">plt.ylabel(</span><span class="s4">'acc'</span><span class="s0">)</span>
+<span class="s0">plt.legend([</span><span class="s4">'train'</span><span class="s0">, </span><span class="s4">'val'</span><span class="s0">])</span>
+<span class="s0">plt.show()</span><hr class="ls0"><span class="s0">#%% 
+mlp2_model = Sequential()</span>
+<span class="s1"># 입력층은 쭉 일렬로 만들어주어야함.</span>
+<span class="s0">mlp2_model.add(Flatten(input_shape=[</span><span class="s3">28</span><span class="s0">,</span><span class="s3">28</span><span class="s0">])) </span><span class="s1">#784</span>
+<span class="s1"># 은닉층 여러겹 중 한겹만 쌓음.</span>
+<span class="s0">mlp2_model.add(Dense(units=</span><span class="s3">64</span><span class="s0">, activation=</span><span class="s4">'relu'</span><span class="s0">))</span>
+<span class="s0">mlp2_model.add(Dropout(rate=</span><span class="s3">0.5</span><span class="s0">))</span>
+
+<span class="s1"># 출력층</span>
+<span class="s0">mlp2_model.add(Dense(units=</span><span class="s3">10</span><span class="s0">, activation=</span><span class="s4">'softmax'</span><span class="s0">))</span><hr class="ls0"><span class="s0">#%% 
+mlp2_model.compile(optimizer=</span><span class="s4">'adam'</span><span class="s0">,</span>
+                 <span class="s0">loss=</span><span class="s4">'sparse_categorical_crossentropy'</span><span class="s0">,</span>
+                 <span class="s0">metrics = [</span><span class="s4">'acc'</span><span class="s0">]</span>
+                 <span class="s0">)</span>
+<span class="s0">mlp2_model.summary()</span><hr class="ls0"><span class="s0">#%% 
+</span><span class="s1"># call-back 2개 지정: 1) 조기 종료, 최적의 가중치 저장</span>
+<span class="s0">early_stopping = keras.callbacks.EarlyStopping(patience=</span><span class="s3">10</span><span class="s0">,</span>
+                                                  <span class="s0">restore_best_weights=</span><span class="s2">True</span><span class="s0">)</span>
+<span class="s0">checkpoint = keras.callbacks.ModelCheckpoint(</span><span class="s4">'best-mlp2-model.h5'</span><span class="s0">)</span>
+
+<span class="s0">mlp2_history = mlp2_model.fit(X_tr, y_tr,</span>
+                            <span class="s0">batch_size=</span><span class="s3">64</span><span class="s0">,</span>
+                            <span class="s0">epochs=</span><span class="s3">20</span><span class="s0">,</span>
+                            <span class="s0">validation_data=(X_val, y_val),</span>
+                            <span class="s1"># callbacks=[가장좋은성능일때가중치파일로저장, 중간멈춤기능],</span>
+                            <span class="s0">callbacks=[checkpoint, early_stopping],</span>
+                            <span class="s0">verbose=</span><span class="s3">2</span>
+                            <span class="s0">)</span><hr class="ls0"><span class="s0">#%% 
+mlp2_model.evaluate(X_val, y_val) </span><span class="s1">#학습된 결과로 검증해보자.</span><hr class="ls0"><span class="s0">#%% 
+plt.plot(mlp2_history.history[</span><span class="s4">'loss'</span><span class="s0">])</span>
+<span class="s0">plt.plot(mlp2_history.history[</span><span class="s4">'val_loss'</span><span class="s0">])</span>
+<span class="s0">plt.xlabel(</span><span class="s4">'epoch'</span><span class="s0">)</span>
+<span class="s0">plt.ylabel(</span><span class="s4">'loss'</span><span class="s0">)</span>
+<span class="s0">plt.legend([</span><span class="s4">'train'</span><span class="s0">, </span><span class="s4">'val'</span><span class="s0">])</span>
+<span class="s0">plt.show()</span><hr class="ls0"><span class="s0">#%% 
+plt.plot(mlp2_history.history[</span><span class="s4">'acc'</span><span class="s0">])</span>
+<span class="s0">plt.plot(mlp2_history.history[</span><span class="s4">'val_acc'</span><span class="s0">])</span>
+<span class="s0">plt.xlabel(</span><span class="s4">'epoch'</span><span class="s0">)</span>
+<span class="s0">plt.ylabel(</span><span class="s4">'acc'</span><span class="s0">)</span>
+<span class="s0">plt.legend([</span><span class="s4">'train'</span><span class="s0">, </span><span class="s4">'val'</span><span class="s0">])</span>
+<span class="s0">plt.show()</span><hr class="ls0"><span class="s0">#%% 
+</span><span class="s2">from </span><span class="s0">tensorflow.keras.models </span><span class="s2">import </span><span class="s0">load_model</span>
+<span class="s0">best_model = load_model(</span><span class="s4">'best-mlp2-model.h5'</span><span class="s0">)</span>
+<span class="s0">best_model.summary()</span><hr class="ls0"><span class="s0">#%% 
+y_pred_proba = best_model.predict(X_val[</span><span class="s3">0</span><span class="s0">:</span><span class="s3">1</span><span class="s0">])</span>
+<span class="s0">y_pred_proba</span><hr class="ls0"><span class="s0">#%% 
+np.argmax(y_pred_proba) </span><span class="s1">#리스트의 값중에서 최고값의 위치를 알려줌.</span><hr class="ls0"><span class="s0">#%% 
+target_values[</span><span class="s3">2</span><span class="s0">]</span><hr class="ls0"><span class="s0">#%% 
+plt.imshow(X_val[</span><span class="s3">0</span><span class="s0">].reshape(</span><span class="s3">28</span><span class="s0">,</span><span class="s3">28</span><span class="s0">))</span><hr class="ls0"><span class="s0">#%% 
+y_val</span><hr class="ls0"><span class="s0">#%% 
+</span><span class="s1">## 전처리하여 특성을 부여하자....</span>
+<span class="s1">## 여러가지 이미지의 특성을 자동으로 찾아내고 요약해서 그 결과를 딥러닝에 넣자.</span>
+<span class="s2">from </span><span class="s0">tensorflow.keras.layers </span><span class="s2">import </span><span class="s0">Conv2D, MaxPooling2D</span>
+<span class="s0">cnn_model = Sequential()</span>
+<span class="s1">## 전처리(필터를 거쳐서 특성을 부여한 것을 모은 다음, 요약한다.)</span>
+<span class="s0">cnn_model.add(Conv2D(filters=</span><span class="s3">16</span><span class="s0">,</span>
+                     <span class="s0">kernel_size=(</span><span class="s3">3</span><span class="s0">,</span><span class="s3">3</span><span class="s0">),</span>
+                     <span class="s0">activation=</span><span class="s4">'relu'</span><span class="s0">,</span>
+                     <span class="s0">input_shape=[</span><span class="s3">28</span><span class="s0">,</span><span class="s3">28</span><span class="s0">,</span><span class="s3">1</span><span class="s0">]</span>
+                     <span class="s0">))</span>
+<span class="s0">cnn_model.add(MaxPooling2D(pool_size=(</span><span class="s3">2</span><span class="s0">,</span><span class="s3">2</span><span class="s0">)))</span><hr class="ls0"><span class="s0">#%% 
+cnn_model.add(Flatten())</span>
+<span class="s0">cnn_model.add(Dense(units=</span><span class="s3">64</span><span class="s0">, activation=</span><span class="s4">'relu'</span><span class="s0">))</span>
+<span class="s0">cnn_model.add(Dropout(rate=</span><span class="s3">0.5</span><span class="s0">))</span>
+<span class="s0">cnn_model.add(Dense(units=</span><span class="s3">10</span><span class="s0">, activation=</span><span class="s4">'softmax'</span><span class="s0">))</span>
+
+<span class="s0">cnn_model.compile(optimizer=</span><span class="s4">'adam'</span><span class="s0">,</span>
+                 <span class="s0">loss=</span><span class="s4">'sparse_categorical_crossentropy'</span><span class="s0">,</span>
+                 <span class="s0">metrics = [</span><span class="s4">'acc'</span><span class="s0">]</span>
+                 <span class="s0">)</span>
+<span class="s0">cnn_model.summary()</span><hr class="ls0"><span class="s0">#%% 
+</span><span class="s1"># call-back 2개 지정: 1) 조기 종료, 최적의 가중치 저장</span>
+<span class="s0">early_stopping2 = keras.callbacks.EarlyStopping(patience=</span><span class="s3">3</span><span class="s0">,</span>
+                                                  <span class="s0">restore_best_weights=</span><span class="s2">True</span><span class="s0">)</span>
+<span class="s1"># 검증 성능(보통 val_loss 또는 monitor로 지정한 값)이 개선되지 않는 상태가 “연속 3번” 발생하면 학습을 멈춘다.</span>
+<span class="s0">checkpoint2 = keras.callbacks.ModelCheckpoint(</span><span class="s4">'best-cnn2-model.h5'</span><span class="s0">)</span>
+
+<span class="s0">cnn_history = cnn_model.fit(X_tr, y_tr,</span>
+                             <span class="s0">batch_size=</span><span class="s3">64</span><span class="s0">,</span>
+                             <span class="s0">epochs=</span><span class="s3">20</span><span class="s0">,</span>
+                             <span class="s0">validation_data=(X_val, y_val),</span>
+                             <span class="s0">callbacks = [ checkpoint2, early_stopping2 ],</span>
+                             <span class="s0">verbose=</span><span class="s3">2</span><span class="s0">)</span><hr class="ls0"><span class="s0">#%% 
+</span><span class="s1">## 검증데이터로 검증해보세요.</span>
+<span class="s0">cnn_model.evaluate(X_val, y_val)</span><hr class="ls0"><span class="s0">#%% 
+</span><span class="s1">## 모델파일로 읽어서 요약해보세요.</span>
+<span class="s0">best_model = load_model(</span><span class="s4">'best-cnn2-model.h5'</span><span class="s0">)</span>
+<span class="s0">best_model.summary()</span><hr class="ls0"><span class="s0">#%% 
+best_model.weights</span><hr class="ls0"><span class="s0">#%% 
+plt.plot(cnn_history.history[</span><span class="s4">'loss'</span><span class="s0">])</span>
+<span class="s0">plt.plot(cnn_history.history[</span><span class="s4">'val_loss'</span><span class="s0">])</span>
+<span class="s0">plt.xlabel(</span><span class="s4">'epoch'</span><span class="s0">)</span>
+<span class="s0">plt.ylabel(</span><span class="s4">'loss'</span><span class="s0">)</span>
+<span class="s0">plt.legend([</span><span class="s4">'train'</span><span class="s0">, </span><span class="s4">'val'</span><span class="s0">])</span>
+<span class="s0">plt.show()</span><hr class="ls0"><span class="s0">#%% 
+</span><span class="s1">## acc그래프로 그려보세요.</span>
+<span class="s0">plt.plot(cnn_history.history[</span><span class="s4">'acc'</span><span class="s0">])</span>
+<span class="s0">plt.plot(cnn_history.history[</span><span class="s4">'val_acc'</span><span class="s0">])</span>
+<span class="s0">plt.xlabel(</span><span class="s4">'epoch'</span><span class="s0">)</span>
+<span class="s0">plt.ylabel(</span><span class="s4">'acc'</span><span class="s0">)</span>
+<span class="s0">plt.legend([</span><span class="s4">'train'</span><span class="s0">, </span><span class="s4">'val'</span><span class="s0">])</span>
+<span class="s0">plt.show()</span><hr class="ls0"><span class="s0">#%% 
+</span><span class="s1">## 검증데이터 첫번째것으로 예측 --&gt; coat가 나와야함.</span>
+<span class="s0">y_pred_proba = best_model.predict(X_val[</span><span class="s3">0</span><span class="s0">:</span><span class="s3">1</span><span class="s0">])</span><hr class="ls0"><span class="s0">#%% 
+np.argmax(y_pred_proba)</span><hr class="ls0"><span class="s0">#%% 
+target_values[</span><span class="s3">4</span><span class="s0">]</span><hr class="ls0"><span class="s0">#%% 
+</span></pre>
+</body>
+</html>

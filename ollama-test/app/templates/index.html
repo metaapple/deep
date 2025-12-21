@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+</head>
+
+<body>
+
+<a href=/health>Health</a> <br>
+<a href=/chat?word=httpport>http기본 port</a> <br>
+<a href=/chat?word=한국정보>korea 정보(한글)</a> <br>
+<a href=/chat?word=bmw>bmw 정보</a> <br>
+
+<form method="get" action="/chat">
+    word: <input type="text" name="word" placeholder="english"><br>
+    <button type="submit">search</button>
+</form>
+
+<hr>
+    word: <input type="text" id="word" placeholder="english"><br>
+    <button id="under" type="button">아래에 답을 넣으려고 하는 경우</button>
+
+
+<hr>
+<div id="result" style="background:yellow; width:700px; height:500px;">
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+<script>
+
+    document.getElementById("under").addEventListener("click",function(){
+    word = document.getElementById("word").value
+        default_url = 'http://localhost:8000'
+        axios.get(default_url + '/chat2?word=' + word).then((response) => {
+            console.log(response)
+            data = response.data
+            document.getElementById("result").innerHTML = data.result
+        })
+    })
+</script>
+</body>
+
+</html>

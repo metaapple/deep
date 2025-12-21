@@ -1,0 +1,7 @@
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+requests==2.32.3
+chromadb==0.5.23
+huggingface_hub==0.27.1
+pymupdf
+python-multipart

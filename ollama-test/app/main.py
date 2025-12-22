@@ -8,7 +8,7 @@ from fastapi import FastAPI, Request
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse
-from ollama_client import stream_generate
+
 
 class HealthResponse(BaseModel):
     status : str
@@ -100,3 +100,14 @@ from fastapi.responses import StreamingResponse
 async def stream(word : str):
     return StreamingResponse(stream_generate(word), media_type="text/event-stream")
 
+async def stream_generate(prompt: str):
+    stream = await ollama.AsyncClient().generate(
+        model=MODEL,
+        prompt=prompt,
+        stream=True,
+        keep_alive=-1
+    )
+    async for part in stream:
+        # "이 값을 내보내고, 여기서 잠깐 멈춰. 다음에 다시 불러주면 이어서 할게!"
+        # ollama로 부터 받은 조각마다 보내..
+        yield part["response"]

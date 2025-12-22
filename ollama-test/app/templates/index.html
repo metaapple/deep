@@ -9,7 +9,7 @@
 
 <a href=/health>Health</a> <br>
 <a href=/chat?word=httpport>http기본 port</a> <br>
-<a href=/chat?word=한국정보>korea 정보(한글)</a> <br>
+<a href=/stream?word=한국정보>korea 정보(한글)</a> <br>
 <a href=/chat?word=bmw>bmw 정보</a> <br>
 
 <form method="get" action="/chat">
@@ -32,11 +32,12 @@
 
     document.getElementById("under").addEventListener("click",function(){
     word = document.getElementById("word").value
-        default_url = 'http://localhost:8000'
-        axios.get(default_url + '/chat2?word=' + word).then((response) => {
+        //default_url = 'http://localhost:8000'
+        axios.get('/chat?word=' + word).then((response) => {
             console.log(response)
             data = response.data
-            document.getElementById("result").innerHTML = data.result
+            console.log(data)
+            document.getElementById("result").innerHTML = data
         })
     })
 </script>

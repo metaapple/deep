@@ -26,11 +26,11 @@ def test_llama_vision(image_path, prompt="이 이미지에 무엇이 보이나�
         response = requests.post(url, json=payload)
         response.raise_for_status()
         result = response.json()
-        print(f"🤖 모델 답변:\n{result.get('response')}")
+        print(f" 모델 답변:\n{result.get('response')}")
     except Exception as e:
-        print(f"❌ 에러 발생: {e}")
+        print(f" 에러 발생: {e}")
 
 
 if __name__ == "__main__":
     # 프로젝트 폴더에 있는 이미지 파일명을 넣으세요.
-    test_llama_vision("test_image.jpg")
+    test_llama_vision("./test_image.png")

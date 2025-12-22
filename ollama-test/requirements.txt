@@ -8,3 +8,4 @@ pydantic-settings==2.6.1
 # For optional Hugging Face GGUF download script:
 huggingface_hub==0.26.2
 Jinja2
+ollama

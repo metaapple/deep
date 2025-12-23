@@ -149,7 +149,31 @@
       document.getElementById(resultElementId).innerHTML = `<div class="error">오류: ${msg}</div>`;
     }
 
-    // 1. 챗봇
+
+    // 페이지 로드 시 기존 대화 기록 불러오기
+  async function loadChatHistory() {
+    try {
+      const response = await axios.get("/chat-history/default"); //default는 userid(==sessionid)
+      const history = response.data.history;
+
+      const chatBox = document.getElementById("chatBox");
+      chatBox.innerHTML = "";  // 기존 내용 초기화
+
+      for (const msg of history) {
+        if (msg.type === "user") {
+          chatBox.innerHTML += `<div class="chat-message user"><strong>나:</strong> ${msg.content}</div>`;
+        } else if (msg.type === "ai") {
+          chatBox.innerHTML += `<div class="chat-message ai"><strong>AI:</strong> ${msg.content}</div>`;
+        }
+      }
+      chatBox.scrollTop = chatBox.scrollHeight;
+    } catch (err) {
+      console.warn("히스토리 불러오기 실패 (새 세션일 수 있음)", err);
+      // 실패해도 그냥 빈 채팅창으로 시작하면 됨
+    }
+  }
+
+ // 1. 챗봇
     function sendChat() {
       const input = document.getElementById("chatInput");
       const message = input.value.trim();
@@ -159,7 +183,8 @@
       chatBox.innerHTML += `<div class="chat-message user"><strong>나:</strong> ${message}</div>`;
       chatBox.scrollTop = chatBox.scrollHeight;
 
-      axios.post(`${API_URL}/chat`, { message })
+     // 중요! 백엔드에 session_id 전달
+      axios.post("/chat", { message, session_id: "default" })
         .then(response => {
           chatBox.innerHTML += `<div class="chat-message ai"><strong>AI:</strong> ${response.data.response}</div>`;
           chatBox.scrollTop = chatBox.scrollHeight;
@@ -171,6 +196,11 @@
 
       input.value = "";
     }
+
+    // 페이지 로드 완료 시 히스토리 불러오기
+  window.onload = function() {
+    loadChatHistory();
+  };
 
     document.getElementById("chatInput").addEventListener("keypress", e => {
       if (e.key === "Enter") sendChat();
@@ -273,7 +303,7 @@
         })
         .catch(err => handleError(err, "namesResult"));
     }
-      
+
   </script>
 </body>
 </html>

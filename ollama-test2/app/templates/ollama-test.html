@@ -227,7 +227,7 @@
       if (!text) return;
       document.getElementById("translateResult").innerHTML = "번역 중...";
 
-      axios.post(`${API_URL}/translate`, { text })
+      axios.post(`/translate`, { text })
         .then(res => {
           document.getElementById("translateResult").innerHTML = res.data.translation;
         })
@@ -240,7 +240,7 @@
       if (!text) return;
       document.getElementById("sentimentResult").innerHTML = "분석 중...";
 
-      axios.post(`${API_URL}/sentiment`, { text })
+      axios.post(`/sentiment`, { text })
         .then(res => {
           document.getElementById("sentimentResult").innerHTML = `<strong>감정:</strong> ${res.data.sentiment}`;
         })
@@ -254,7 +254,7 @@
       if (!topic) return;
       document.getElementById("brainstormResult").innerHTML = "생성 중...";
 
-      axios.post(`${API_URL}/brainstorm`, { topic, count })
+      axios.post(`/brainstorm`, { topic, count })
         .then(res => {
           document.getElementById("brainstormResult").innerHTML = res.data.ideas.replace(/\n/g, '<br>');
         })
@@ -268,7 +268,7 @@
       if (!topic) return;
       document.getElementById("poemResult").innerHTML = "시를 짓는 중...";
 
-      axios.post(`${API_URL}/poem`, { topic, style })
+      axios.post(`/poem`, { topic, style })
         .then(res => {
           document.getElementById("poemResult").innerHTML = res.data.poem.replace(/\n/g, '<br>');
         })
@@ -283,7 +283,7 @@
       if (!ingredients) return;
       document.getElementById("recipeResult").innerHTML = "레시피 생성 중...";
 
-      axios.post(`${API_URL}/recipe`, { ingredients, servings, difficulty })
+      axios.post(`/recipe`, { ingredients, servings, difficulty })
         .then(res => {
           document.getElementById("recipeResult").innerHTML = res.data.recipe.replace(/\n/g, '<br>');
         })
@@ -299,7 +299,7 @@
 
       document.getElementById("namesResult").innerHTML = "이름 제안 중...";
 
-      axios.post(`${API_URL}/names`, { category, gender, count, vibe })
+      axios.post(`/names`, { category, gender, count, vibe })
         .then(res => {
           document.getElementById("namesResult").innerHTML = res.data.names.replace(/\n/g, '<br>');
         })

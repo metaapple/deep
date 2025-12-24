@@ -28,7 +28,7 @@ app = FastAPI()
 # Redis 설정 (로컬 개발 기준, 프로덕션에서는 환경변수로 관리)
 REDIS_URL = "redis://localhost:6379"
 # 앱 상태에 Redis 클라이언트 저장
-app.state.redis = None # 아직 연결안됨. fastapi시작할 때 redis도 연결해두려고 함.
+app.state.redis = None
 
 # Static 파일 설정 (CSS, JS, 이미지 등)
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -96,20 +96,16 @@ async def preload_model():
         )
         print(f"{MODEL} 모델이 미리 로드되었습니다. (메모리에 영구 유지)")
 
-        app.state.redis = Redis.from_url(url=REDIS_URL, decode_responses=True)
-        # decode_responses=True --> 바이트스트림으로 도착한 데이터 utf-8로 자동으로 변환
-
-        print(f"{REDIS_URL}로 Redis서버 미리 연결됨.")
+        app.state.redis = Redis.from_url(REDIS_URL, decode_responses=True)
+        print("Redis 연결 성공")
 
     except Exception as e:
         print(f"모델 preload 실패 또는 Redis연결 실패 : {e}")
 
-# fastapi서버가 종료(재부팅)되었을 때 자동 호출됨.
 @app.on_event("shutdown")
 async def shutdown_event():
     if app.state.redis:
         await app.state.redis.close()
-        print("redis 연결 종료됨.....")
 
 # 일반 generate 엔드포인트 (스트리밍 없이 전체 응답)
 @app.get("/chat")
@@ -273,111 +269,132 @@ async def chat(request: ChatRequest):
                         # {'role': 'assistant', 'content': '싱가포르는 다채로운 문화와 현대적인 도시, 그리고 맛있는 음식으로 유명합니다. \n\n*   **교통:** 대중교통 시스템이 매우 잘 갖춰져 있어 편리하게 이동할 수 있습니다.\n*   **관광 명소:** 마리나 베이 푹, 센토사 섬, 칠리 궁전 등 다양한 명소가 있습니다.\n*   **특징:** 24시간 영업하는 식료품점, 다양한 길거리 음식, 럭셔리한 쇼핑 등 독특한 경험을 할 수 있습니다.\n\n**여행 준비:** 미리 항공권과 숙소를 예약하고, 환전은 한국 원화로 하는 것이 좋습니다.'}]}
     return {"response": ai_message}
 
-# redis에 키를 chat_history:로그인id로 만들어줄 예정.
-# id가 apple인 경우 키는 chat_history:apple
-# id가 default인 경우 키는 chat_history:default
-# chat_history:apple, chat_history:default는 키이므로 unique해야함.
-class ChatRequest(BaseModel):
-    message: str
-    session_id: str = "default" #로그인한 아이디
 
 # 기존 /chat 엔드포인트 수정
 ########### redis연결후
 @app.post("/chat")
 async def chat(request: ChatRequest):
-    print(f"서버로 전달된 값은 {request.message}, {request.session_id}")
-    history = []
-    # prompt를 user_message에 만들어주세요.
-    user_message = f"{request.message}를 200자 이내로 답변을 줘라. 단답형으로 줘라. 응답은 리스트 형태로 줘라."
-    # ollama.AsyncClient().chat()쓸때는
-    # - 내가 쓴 것은 role:user가 되어야만 함.
-    # - 응답받은 것은 role:assistant가 됨.
-    # ollama에게 질문을 줄때는 [{}]로 주어야함.
+    redis = app.state.redis
+    if not redis:
+        raise HTTPException(status_code=500, detail="Redis 연결 안됨")
 
+    session_key = f"chat_history:{request.session_id}"
+
+    # Redis에서 기존 히스토리 불러오기 (List로 저장, 왼쪽이 오래된 메시지)
+    history_json = await redis.lrange(session_key, 0, -1) #리스트의 처음부터 끝까지 다 가지고 오기
+    print("history_json>> ", history_json)
+    history = [json.loads(msg) for msg in history_json]
+    print("history>> ", history)
+
+    # 사용자 메시지 추가
+    user_message = request.message + ", 200글자 이내로 핵심만 답을 줘."
     history.append({"role": "user", "content": user_message})
 
-    # ollama연결해서 응답받고, 리턴
+    # Ollama 호출
     response = await ollama.AsyncClient().chat(
         model=MODEL,
         messages=history,
         keep_alive=-1
     )
 
-    print("-----------------")
-    print(response)
-
-    # 올라마의 결과는 dict로 온다.
-    # response변수에 저장함.--> {message : {content : 응답내용}}
     ai_message = response["message"]["content"]
     history.append({"role": "assistant", "content": ai_message})
 
-    print("chat_histories>> ", history)
+    # Redis에 다시 저장 (최근 10턴 = 20 메시지만 유지)
+    # 먼저 기존 리스트 지우고 새로 push
+    await redis.delete(session_key)
+    # 최근 20개만 저장 (역순으로 push해서 lrange로 오래된->최신 순서 유지)
+    recent_history = history[-20:]
+    if recent_history:
+        await redis.rpush(session_key, *[json.dumps(msg) for msg in recent_history])
 
-    ## redis에 넣자.!
-    session_key = "chat_history:" + request.session_id
-    # history가 있으면 넣자.!!
+    # 선택적으로 TTL 설정 (예: 7일 후 자동 만료)
+    await redis.expire(session_key, 60 * 60 * 24 * 7)
 
-    redis = app.state.redis
-
-    if history:
-        # redis에는 json으로 넣어주어야한다.
-        # 우리는 dict를 가지고 있다 --> json으로 바꾸어주어야함.
-        # json.dumps(dict)
-        await redis.rpush(session_key, *[json.dumps(one) for one in history])
-
-    return {"response" : response['message']['content']}
-
+    return {"response": ai_message}
 
 @app.get("/chat-history/{session_id}")
-async def chat_history(session_id : str):
-
-    # 1. 레디스가 연결이 안되어있으면 500번에러
+async def get_chat_history(session_id: str):
     redis = app.state.redis
-    if not redis : #redis가 None이면
-        raise HTTPException(status_code=500, detail="Redis 연결 안됨.")
-        # http응답을 보내버림(code, detail을 http 헤더에 넣어서 브라우저에 응답함.)
-        # http만들어서 응답하고 끝!
+    if not redis:
+        raise HTTPException(status_code=500, detail="Redis 연결 안됨")
 
-    # 2. 레이스가 연결이 되어있으면
-    session_key = 'chat_history:' + session_id
-    # [1,2,2,34,354,5435345,35,3,45,353,5,35,35,353,5,3,5,3,4,5,6]
-    # 6은 -1인덱스임.
-
-    #    redis.lrange() 리스트를 불러오자.
+    session_key = f"chat_history:{session_id}"
     history_json = await redis.lrange(session_key, 0, -1)
-    print("==========================================")
-    print(history_json) ## [ '{}', '{}', ...] ==> [{}, {}, {},....]
-    # for문 돌려서 '{}'이렇게 생긴 string을 빼서 json으로 바꿔서,
-    # json의 리스트로 만들어주어야함.
     history = [json.loads(msg) for msg in history_json]
-    # [{}, {}, {}, ....]
-    print("*********************************")
-    print(history)
-    return {"history" : history}
+
+    # role에 따라 구분해서 프론트에서 쉽게 표시할 수 있게
+    messages = []
+    for msg in history:
+        if msg["role"] == "user":
+            messages.append({"type": "user", "content": msg["content"]})
+        elif msg["role"] == "assistant":
+            messages.append({"type": "ai", "content": msg["content"]})
+
+    return {"history": messages}
 
 
+class TranslateRequest(BaseModel):
+    text:str
+@app.post('/translate')
+async def translate(request: TranslateRequest):
+    #http://localhost:11434/api/generate,json=payload를 generatoe()함수가 대신 해준다.
+    #post 방식으로 http요청을 해줌.
+    prompt=f"{request.text}를 자연스러운 한국어로 번역해주세요"
+    print(prompt)
+    response=await ollama.AsyncClient().generate(
+        model=MODEL,
+        prompt=prompt,
+        keep_alive=-1
+    )
+    print('------------------------')
+    print(response['response'])
+    return {'summary':response['response'].strip()}
 
+class NamesRequest(BaseModel):
+    #axios.post로 전달될 때 키와 이름이 같아야 한다.
+    category:str='카페'
+    gender:str="중성"
+    vibe:str='귀여운'
+    count:int=3
+    
+@app.post('/create_name')
+async def translate(request: NamesRequest):
+    print('request',request.category)
+    #http://localhost:11434/api/generate,json=payload를 generatoe()함수가 대신 해준다.
+    #post 방식으로 http요청을 해줌.
+    prompt=f"""{request.category}의 이름을 
+                {request.gender}느낌으로 
+                {request.count}개만 추천해주세요.
+            """
+    print(prompt)
+    response=await ollama.AsyncClient().generate(
+        model=MODEL,
+        prompt=prompt,
+        keep_alive=-1
+    )
+    print('------------------------')
+    print(response['response'])
+    return {'summary':response['response'].strip()}
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+class PoemsRequest(BaseModel):
+    topic:str
+    style:str
+    
+@app.post('/poem')
+async def translate(request: PoemsRequest):
+    print('request',request.topic,request.style)
+    #http://localhost:11434/api/generate,json=payload를 generatoe()함수가 대신 해준다.
+    #post 방식으로 http요청을 해줌.
+    prompt=f"""{request.topic}을 주제로 
+                {request.style}스타일로 시를 지어 주세요.
+            """
+    print(prompt)
+    response=await ollama.AsyncClient().generate(
+        model=MODEL,
+        prompt=prompt,
+        keep_alive=-1
+    )
+    print('------------------------')
+    print(response['response'])
+    return {'summary':response['response'].strip()}

@@ -332,3 +332,69 @@ async def get_chat_history(session_id: str):
             messages.append({"type": "ai", "content": msg["content"]})
 
     return {"history": messages}
+
+
+class TranslateRequest(BaseModel):
+    text:str
+@app.post('/translate')
+async def translate(request: TranslateRequest):
+    #http://localhost:11434/api/generate,json=payload를 generatoe()함수가 대신 해준다.
+    #post 방식으로 http요청을 해줌.
+    prompt=f"{request.text}를 자연스러운 한국어로 번역해주세요"
+    print(prompt)
+    response=await ollama.AsyncClient().generate(
+        model=MODEL,
+        prompt=prompt,
+        keep_alive=-1
+    )
+    print('------------------------')
+    print(response['response'])
+    return {'summary':response['response'].strip()}
+
+class NamesRequest(BaseModel):
+    #axios.post로 전달될 때 키와 이름이 같아야 한다.
+    category:str='카페'
+    gender:str="중성"
+    vibe:str='귀여운'
+    count:int=3
+    
+@app.post('/create_name')
+async def translate(request: NamesRequest):
+    print('request',request.category)
+    #http://localhost:11434/api/generate,json=payload를 generatoe()함수가 대신 해준다.
+    #post 방식으로 http요청을 해줌.
+    prompt=f"""{request.category}의 이름을 
+                {request.gender}느낌으로 
+                {request.count}개만 추천해주세요.
+            """
+    print(prompt)
+    response=await ollama.AsyncClient().generate(
+        model=MODEL,
+        prompt=prompt,
+        keep_alive=-1
+    )
+    print('------------------------')
+    print(response['response'])
+    return {'summary':response['response'].strip()}
+
+class PoemsRequest(BaseModel):
+    topic:str
+    style:str
+    
+@app.post('/poem')
+async def translate(request: PoemsRequest):
+    print('request',request.topic,request.style)
+    #http://localhost:11434/api/generate,json=payload를 generatoe()함수가 대신 해준다.
+    #post 방식으로 http요청을 해줌.
+    prompt=f"""{request.topic}을 주제로 
+                {request.style}스타일로 시를 지어 주세요.
+            """
+    print(prompt)
+    response=await ollama.AsyncClient().generate(
+        model=MODEL,
+        prompt=prompt,
+        keep_alive=-1
+    )
+    print('------------------------')
+    print(response['response'])
+    return {'summary':response['response'].strip()}

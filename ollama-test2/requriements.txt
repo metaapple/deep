@@ -9,3 +9,4 @@ pydantic-settings==2.6.1
 huggingface_hub==0.26.2
 Jinja2
 ollama
+redis==5.2.0

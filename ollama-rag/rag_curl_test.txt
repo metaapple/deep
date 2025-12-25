@@ -1,0 +1,75 @@
+ # 1) PDF 인덱싱
+curl -X POST "http://localhost:8001/rag/ingest/pdf" \
+  -F "file=@./pdf/rag_test_1.pdf"
+
+# 2) 질문
+curl -X POST "http://localhost:8001/rag/ask" \
+  -H "Content-Type: application/json" \
+  -d '{"question":"Ollama default port?", "top_k":2}'
+
+
+  curl -X POST "http://localhost:8001/rag/ingest/pdf" \
+  -F "file=@./pdf/secret_test_ko.pdf"
+
+curl -X POST "http://localhost:8001/rag/ask" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "question": "우리 회사의 비밀키는?",
+    "top_k": 2
+  }'
+
+curl -s -X POST "http://localhost:8001/rag/ask" \
+  -H "Content-Type: application/json" \
+  -d '{"question":"우리 회사의 비밀키는?","top_k":2}' | jq
+
+
+curl -X POST "http://localhost:8001/rag/ask" \
+  -H "Content-Type: application/json" \
+  -d '{"question":"What is the default Ollama API port?","top_k":3}'
+
+  curl -X POST "http://localhost:8001/rag/ask" \
+  -H "Content-Type: application/json" \
+  -d '{"question":"What is the default Ollama API port?","top_k":4}' | jq
+
+  curl -X POST "http://localhost:8001/rag/ingest/pdf" \
+  -F "file=@./pdf/ssds_fake.pdf"
+
+
+curl -X POST "http://localhost:8001/rag/ask" \
+  -H "Content-Type: application/json" \
+  -d '{"question":"가짜 프로젝트 코드명은 무엇인가?","top_k":4}' | jq
+
+curl -X POST "http://localhost:8001/rag/ingest/pdf" \
+-F "file=@./pdf/google_fake.pdf"
+
+ curl -s -X POST "http://localhost:8001/rag/ask"
+  -H "Content-Type: application/json"
+  -d '{"question":"가짜 프로젝트 코드명은 무엇인가?","top_k":4,"source":"google_fake.pdf"}' | jq
+
+  curl -s -X POST "http://localhost:8001/rag/ask" -H "Content-Type: application/json" -d '{"question":"삼성전자 가짜 프로젝트 코드명은 무엇인가?","top_k":4}' | jq
+
+
+(.venv) administrator@MacBook-Pro ollama-rag2 % curl -s -X POST "http://localhost:8001/rag/ingest/pdf" -F "file=@./pdf/rag_test_reranker_fake.pdf" | jq
+
+{
+  "ok": true,
+  "before": 10,
+  "added": 2,
+  "after": 12,
+  "source": "rag_test_reranker_fake.pdf"
+}
+
+curl -s -X POST "http://localhost:8001/rag/ask" -H "Content-Type: application/json" -d '{"question":"가짜 성능 지표","top_k":4,"source":"/pdf/rag_test_reranker_fake.pdf"}' | jq
+
+######################
+(.venv) administrator@MacBook-Pro ollama-rag2 % curl -s -X POST "http://localhost:8001/rag/ask" -H "Content-Type: application/json" -d '{"question":"baseline","top_k":4,"source":"/pdf/rag_test_reranker_fake.pdf"}' | jq
+
+{
+  "answer": "62",
+  "retrieved": [
+    "RAG 테스트 문서 (가짜 데이터) - 러너(Rera
+
+######################
+
+
+

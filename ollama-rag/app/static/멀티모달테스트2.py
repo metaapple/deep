@@ -2,7 +2,7 @@ import pytesseract
 import cv2  # OpenCV로 이미지 전처리 (정확도 향상)
 
 pytesseract.pytesseract.tesseract_cmd = r'/usr/local/bin/tesseract'  # Windows 예시
-
+# pytesseract.pytesseract.tesseract_cmd = r'C:/Program Files/Tesseract-OCR/tesseract.exe'  # Windows 예시
 def extract_text_with_tesseract(image_path, lang='kor'): # kor+eng
     """
     Tesseract를 사용해 이미지에서 텍스트 추출

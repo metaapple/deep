@@ -521,6 +521,9 @@ def search(req: AskRequest):
     return {"retrieved": docs}
 
 
+@app.get("/ask-ui", response_class=HTMLResponse)
+def ask_ui(request: Request):
+    return templates.TemplateResponse("ask.html", {"request": request})
 
 
 

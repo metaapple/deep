@@ -2,7 +2,7 @@ import ollama
 import asyncio
 import httpx
 import uvicorn
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File
 from pydantic import BaseModel
 from fastapi import FastAPI, Request
 from fastapi.templating import Jinja2Templates
@@ -12,6 +12,8 @@ from fastapi.responses import HTMLResponse
 from redis.asyncio import Redis  # redis-py의 async 클라이언트
 import json
 
+from chroma_db import ChromaRAG
+from fastapi import UploadFile, File
 
 # from fastapi.middleware.cors import CORSMiddleware
 # from transformers import pipeline
@@ -49,121 +51,6 @@ templates = Jinja2Templates(directory="templates")
 # MODEL = "gemma3:4b"
 MODEL = "gemma3:1b"
 OLLAMA_BASE_URL = "http://localhost:11434"
-
-################### RAG #########################
-
-from fastapi import UploadFile, File
-from pydantic import BaseModel
-from chroma_db import ChromaRAG
-
-# RAG용 모델 (원하면 MODEL과 분리 가능)
-RAG_MODEL = MODEL  # 예: "gemma3:1b"
-# RAG_MODEL = "llama3.2:3b"
-
-rag = ChromaRAG(
-    chroma_dir="./chroma_data",
-    collection_name="rag_docs",
-    ollama_base_url=OLLAMA_BASE_URL,
-    embed_model="nomic-embed-text",
-    gen_model=RAG_MODEL,
-)
-
-class AskReq(BaseModel):
-    question: str
-    top_k: int = 4
-    source: str | None = None   # 예: "rag_test_google_fake.pdf"
-
-@app.post("/rag/ingest/pdf")
-async def ingest_pdf(file: UploadFile = File(...)):
-    pdf_bytes = await file.read()
-    text = rag.pdf_to_text(pdf_bytes)
-
-    if not text or not text.strip():
-        return {
-            "ok": False,
-            "message": "PDF에서 텍스트를 추출하지 못했습니다. (스캔본 PDF일 수 있음) OCR이 필요할 수 있습니다."
-        }
-
-    before = rag.count()
-    added = rag.ingest_document(raw_text=text, source=file.filename)
-    after = rag.count()
-
-    return {"ok": True, "before": before, "added": added, "after": after, "source": file.filename}
-
-@app.post("/rag/ask")
-async def rag_ask(req: AskReq):
-    # 1) retrieve: 일단 후보를 넉넉히 가져온다 (source 필터링을 위해)
-    # top_k만 가져오면 필터링 후 0개가 될 수 있으니 여유분을 둔다.
-    candidate_k = max(req.top_k * 6, 12)
-    candidates = rag.query_docs(req.question, top_k=candidate_k)
-
-    # 2) source 필터 적용 (요청에 source가 들어오면 해당 source가 포함된 청크만 사용)
-    # 주의: 현재 ChromaRAG.query_docs()가 메타데이터를 안 주는 구조라
-    #       "청크 텍스트 안에 source가 포함되어 있을 때만" 걸러낼 수 있다.
-    #       (완벽한 해결은 chroma_db에서 metadata where 필터를 쓰는 것)
-    docs = candidates
-    if req.source:
-        key = req.source.strip()
-        filtered = [d for d in candidates if key in d]
-        # 필터 결과가 너무 적으면, fallback으로 질문 키워드 기반으로만이라도 top_k 채움
-        if len(filtered) >= 1:
-            docs = filtered[:req.top_k]
-        else:
-            # source 텍스트가 청크에 안 들어있는 경우가 많음 → 이 경우는 metadata 필터가 필요함
-            docs = candidates[:req.top_k]
-    else:
-        docs = candidates[:req.top_k]
-
-    # 3) context 구성 (1B 모델 안정화: 길이 제한)
-    context = "\n\n---\n\n".join(docs)
-    context = context[:3000]
-
-    # 4) prompt 구성 (발췌 강제)
-    prompt = f"""규칙:
-- 아래 CONTEXT에 있는 내용만 사용해서 답해라.
-- CONTEXT에 정답이 있으면 반드시 답해야 한다. (회피 금지)
-- CONTEXT에 정답이 없을 때만 정확히 다음 문장만 출력해라:
-문서에 근거가 없습니다.
-- 질문이 숫자/포트/URL/키를 묻는 경우: 답은 정답만 한 줄로 출력해라.
-
-CONTEXT:
-{context}
-
-QUESTION:
-{req.question}
-
-ANSWER:
-"""
-
-    # (디버그)
-    print("[RAG DEBUG] question:", req.question)
-    print("[RAG DEBUG] top_k:", req.top_k, "candidate_k:", candidate_k)
-    print("[RAG DEBUG] source:", req.source)
-    print("[RAG DEBUG] candidates_n:", len(candidates), "docs_n:", len(docs))
-    print("[RAG DEBUG] context_len:", len(context))
-    print("[RAG DEBUG] prompt_len:", len(prompt))
-    print("[RAG DEBUG] prompt_head:", repr(prompt[:180]))
-
-    # 5) generate
-    try:
-        response = await ollama.AsyncClient().generate(
-            model=RAG_MODEL,
-            prompt=prompt,
-            stream=False,
-            options={
-                "temperature": 0.0,
-                "num_predict": 64,
-            },
-            keep_alive=-1
-        )
-        answer = (response.get("response") or "").strip()
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"RAG generate error: {str(e)}")
-
-    return {"answer": answer, "retrieved": docs, "mode": "generate"}
-
-################### RAG #########################
-
 
 @app.get("/")
 def read_root(request: Request):
@@ -464,29 +351,29 @@ chat_histories = {}
 
 ########### redis연결전
 # @app.post("/chat")
-async def chat(request: ChatRequest):
-    history = chat_histories.get(request.session_id, [])
-    history.append({"role": "user", "content": request.message + ", 200글자 이내로 핵심만 답을 줘."})
-    # 나는 user, ai는 assistant
-
-    response = await ollama.AsyncClient().chat(
-        model=MODEL,
-        messages=history,
-        keep_alive=-1
-    )
-
-    print("-----------------")
-    print(response)
-    # message = Message(role='assistant',
-    #                   content='싱가포르는 매력적인 도시로, 다양한 경험을 제공하는 매혹적인 나라입니다. 싱가포르 여행에 대한 유용한 정보들을 정리해 드릴게요.\n\n**1. 여행 준비**\n\n*   **비자:** 한국인은 90일까지 무비자 체류 가능합니다
-    ai_message = response["message"]["content"]
-    history.append({"role": "assistant", "content": ai_message})
-    chat_histories[request.session_id] = history[-10:]  # 최근 10턴 유지
-
-    print("chat_histories>> ", chat_histories)
-    # chat_histories >> {'default': [{'role': 'user', 'content': '싱가폴 여행정보, 200글자 이내로 핵심만 답을 줘.'},
-    # {'role': 'assistant', 'content': '싱가포르는 다채로운 문화와 현대적인 도시, 그리고 맛있는 음식으로 유명합니다. \n\n*   **교통:** 대중교통 시스템이 매우 잘 갖춰져 있어 편리하게 이동할 수 있습니다.\n*   **관광 명소:** 마리나 베이 푹, 센토사 섬, 칠리 궁전 등 다양한 명소가 있습니다.\n*   **특징:** 24시간 영업하는 식료품점, 다양한 길거리 음식, 럭셔리한 쇼핑 등 독특한 경험을 할 수 있습니다.\n\n**여행 준비:** 미리 항공권과 숙소를 예약하고, 환전은 한국 원화로 하는 것이 좋습니다.'}]}
-    return {"response": ai_message}
+# async def chat(request: ChatRequest):
+#     history = chat_histories.get(request.session_id, [])
+#     history.append({"role": "user", "content": request.message + ", 200글자 이내로 핵심만 답을 줘."})
+#     # 나는 user, ai는 assistant
+#
+#     response = await ollama.AsyncClient().chat(
+#         model=MODEL,
+#         messages=history,
+#         keep_alive=-1
+#     )
+#
+#     print("-----------------")
+#     print(response)
+#     # message = Message(role='assistant',
+#     #                   content='싱가포르는 매력적인 도시로, 다양한 경험을 제공하는 매혹적인 나라입니다. 싱가포르 여행에 대한 유용한 정보들을 정리해 드릴게요.\n\n**1. 여행 준비**\n\n*   **비자:** 한국인은 90일까지 무비자 체류 가능합니다
+#     ai_message = response["message"]["content"]
+#     history.append({"role": "assistant", "content": ai_message})
+#     chat_histories[request.session_id] = history[-10:]  # 최근 10턴 유지
+#
+#     print("chat_histories>> ", chat_histories)
+#     # chat_histories >> {'default': [{'role': 'user', 'content': '싱가폴 여행정보, 200글자 이내로 핵심만 답을 줘.'},
+#     # {'role': 'assistant', 'content': '싱가포르는 다채로운 문화와 현대적인 도시, 그리고 맛있는 음식으로 유명합니다. \n\n*   **교통:** 대중교통 시스템이 매우 잘 갖춰져 있어 편리하게 이동할 수 있습니다.\n*   **관광 명소:** 마리나 베이 푹, 센토사 섬, 칠리 궁전 등 다양한 명소가 있습니다.\n*   **특징:** 24시간 영업하는 식료품점, 다양한 길거리 음식, 럭셔리한 쇼핑 등 독특한 경험을 할 수 있습니다.\n\n**여행 준비:** 미리 항공권과 숙소를 예약하고, 환전은 한국 원화로 하는 것이 좋습니다.'}]}
+#     return {"response": ai_message}
 
 
 # redis에 키를 chat_history:로그인id로 만들어줄 예정.
@@ -570,3 +457,91 @@ async def chat_history(session_id: str):
     print("*********************************")
     print(history)
     return {"history": history}
+
+##################################
+# 크로마db test
+##################################
+
+
+from fastapi import HTTPException
+from schemas import *
+from chroma_db import ChromaRAG
+from fastapi import UploadFile, File
+
+
+# RAG 엔진(전역 1개)
+rag = ChromaRAG(
+    chroma_dir="./chroma_data",
+    collection_name="rag_docs",
+    ollama_base_url="http://localhost:11434",
+    embed_model="nomic-embed-text",
+    gen_model="gemma3:1b",
+)
+
+
+# 텍스트를 읽어서 청크--> 임베딩 --> 크로마db에 넣는 요청
+@app.post("/ingest_texts")
+def ingest_texts(req: IngestTextsRequest):
+    if not req.texts:
+        raise HTTPException(status_code=400, detail="texts is empty")
+
+    added = rag.ingest_texts(req.texts, source=req.source)
+    return {"docs_added": added, "total_docs": rag.count()}
+
+# pdf파일을 업로드해서 텍스트로 변환한 후,
+# 텍스트를 읽어서 청크--> 임베딩 --> 크로마db에 넣는 요청
+@app.post("/ingest_pdf")
+async def ingest_pdf(
+        file: UploadFile = File(...),
+        max_chars: int = 1200,
+        overlap_chars: int = 150,
+        source: str = "pdf",
+):
+    """
+    PDF 파일을 업로드 받아 텍스트 추출 → 청킹 → Chroma 저장
+    - 파라미터는 query string 형태로도 받을 수 있게 최소로 구성
+    - 예: /ingest_pdf?max_chars=1200&overlap_chars=150&source=pdf
+    """
+    if not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Only .pdf files are allowed")
+
+    ## 파일을 읽은 이후
+    pdf_bytes = await file.read()
+    if not pdf_bytes:
+        raise HTTPException(status_code=400, detail="Empty file")
+
+    # PDF → 텍스트 추출
+    text = rag.pdf_to_text(pdf_bytes)
+    if not text.strip():
+        # 스캔 PDF(이미지)면 텍스트가 없을 수 있음
+        raise HTTPException(
+            status_code=400,
+            detail="No extractable text found. If it's a scanned PDF, OCR is needed."
+        )
+
+    # 청킹 후 임베딩 후 저장
+    chunks_added = rag.ingest_document(
+        raw_text=text,
+        source=source,
+        max_chars=max_chars,
+        overlap_chars=overlap_chars,
+        meta_extra={"filename": file.filename},
+    )
+
+    return {"chunks_added": chunks_added, "total_docs": rag.count(), "filename": file.filename}
+
+
+@app.post("/ask")
+def ask(req: AskRequest):
+    # 문서가 하나도 없으면 질문해도 의미가 없으니 400 처리
+    if rag.count() == 0:
+        raise HTTPException(status_code=400, detail="No documents. Ingest first.")
+
+    # RAG 실행 (크로마 db에서 검색 -> 안되면 올라마 생성)
+    out = rag.ask(req.question, top_k=req.top_k)
+
+    print("====================")
+    print(out)
+    # dict로 그대로 반환하면 FastAPI가 JSON으로 바꿔서 응답함
+    # out 구조: {"answer": "...", "retrieved": ["...", "..."]}
+    return out

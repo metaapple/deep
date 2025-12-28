@@ -16,4 +16,6 @@ chromadb==0.5.23
 pymupdf
 python-multipart
 
+prompt_toolkit
+
 fitz  # PyMuPDF

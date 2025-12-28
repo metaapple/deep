@@ -545,3 +545,4 @@ def ask(req: AskRequest):
     # dict로 그대로 반환하면 FastAPI가 JSON으로 바꿔서 응답함
     # out 구조: {"answer": "...", "retrieved": ["...", "..."]}
     return out
+    
